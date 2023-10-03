@@ -2,9 +2,11 @@
 ### Athen, Donny, and Jim; Oct 5, 2023
 
 ***
+***
 ## Intro
 Entertainment review sites frequently show a disparity between critic and audience reviews of movies and shows. This project seeks to find features of those critic reviews that diverge from average audience score of a media product.  
 
+***
 ***
 ## Source Data
 In order to make this analysis, we determined we would need a dataset containing at least an average audience score, an average critic score, and a critic review text associated to a large amount of media titles. After some searching we were able to find this:
@@ -22,6 +24,7 @@ These csv's had all the data we needed between them, in these columns:
 * average critic score: tomatoMeter
 * critic review text: reviewText
 * media title: title
+***
 ***
 ## Data Cleaning
 
@@ -53,62 +56,119 @@ massive = massive.drop(columns=['originalScore', 'rating', 'ratingContents', 're
 * Lastly, we considered that there may be duplicated reviews in the remaining data. To be sure to get rid of these, we dropped duplicates in the 'reviewText' column:
 
 >     massive = massive.drop_duplicates(subset='reviewText', keep='first')
-***
-## Data Processing
 
-#### Lemmatization
-* We lemmatized the text of critic reviews to perform analysis:
+* This provided our final cleaned dataframe:
+![massive_cleaned](output_plots/massive_cleaned.png)
+
+***
+***
+## Data Preprocessing
+### Random subsampling
+* Even after cleaning, our dataframe still contained 965167 rows. In order to be able to process this at all we first took a random subsample of the cleaned data:
+>     massive = massive.sample(n=15000)
+
+### Tokenization
+* We also needed to tokenize the text of the review column to perform NLP analysis. Our process for this consisted of removing "stop words" ie very commonly used words that provide little useful data, removing anything containing non-alphabetic characters, setting all words to a base gramatical form (lemma), and encoding the text of reviews as a sequence of tokens:
 ```
-lemmatizer = WordNetLemmatizer()
-import re
-def process_text(text): 
-    sw = set(stopwords.words('english')) 
-    regex = re.compile("[^a-zA-Z ]") 
-    re_clean = regex.sub('', text) 
-    words = word_tokenize(re_clean) 
-    lem = [lemmatizer.lemmatize(word) for word in words] 
-    output = ' '.join([word.lower() for word in lem if word.lower() not in sw]) 
+     lemmatizer = WordNetLemmatizer()
+     import re
+     def process_text(text): 
+          sw = set(stopwords.words('english')) 
+          regex = re.compile("[^a-zA-Z ]") 
+          re_clean = regex.sub('', text) 
+          words = word_tokenize(re_clean) 
+          lem = [lemmatizer.lemmatize(word) for word in words] 
+          output = ' '.join([word.lower() for word in lem if word.lower() not in sw]) 
     return output
     
-massive['reviewText'] = massive['reviewText'].apply(lambda x: process_text(x))
+    massive['reviewText'] = massive['reviewText'].apply(lambda x: process_text(x))
 ```
-#### TFIDF Sentiment Model
-* Fit TFIDF vectorizer for sentiment model
-* Vectorizing original dataframe to dense array for linear model
-    * rename 'title' column to 'title_' as array will contain any use of the word "title" within reviews
-    * Create columns for each vectorized word and combine with original dataframe
-    * Dropping review text now that vectorized words are all columns
-    * Fill nulls with '0'
 
-#### Linear Regression
-*  As shown, the number of reviews per critic and per publication were sharply distributed. We therefore decided to sort the right tail of critics and publications into an "other" category before encoding these categorical data columns.
+### Limiting populations of critics and publications
+*  As shown, the number of reviews per critic and per publication were sharply distributed. We therefore decided to sort the right tail of critic and publication distributions into an "other" category before encoding these categorical data columns in order to limit the number of dummy values in models using these columns. Thresholds for the minimum number of reviews to set critics and publications as their own category were manually selected.
 
 ![Publications](output_plots/histo_publicatioName.png)
 
 ![Critics](output_plots/histo_criticName.png)
-* We therefore decided to sort the right tail of critics and publications into an "other" category before encoding these categorical data columns.
+
 ```
 counts = combined.criticName.value_counts()
 threshold = combined.criticName.isin(counts.index[counts<16])
 combined.loc[threshold, 'criticName'] = 'Other'
-combined['criticName'].value_counts()
 ```
 
 ```
 counts = combined.publicatioName.value_counts()
 threshold = combined.publicatioName.isin(counts.index[counts<12])
 combined.loc[threshold, 'publicatioName'] = 'Other'
-combined['publicatioName'].value_counts()
+```
+***
+## Modeling
+## TF-IDF Sentiment Model
+Term Frequency-Inverse Document Frequency (TF-IDF) is a measure combining how frequently a term appears within a document (Term Frequency) with the importance of a term within a corpus of documents (Inverse Document Frequency) to assign a weight to each term in a document. Our first model attempts to predict the critic score sentiment, whether 'positive' or 'negative', based on a TF-IDF of the critic reviews. 
+### Process
+* Fit TFIDF vectorizer for sentiment model
+* Split the data into training and testing sets
+* Train Logistic Regression model
+
+
+### Results
+```
+    model.score(X_train, y_train)
+    0.8237333333333333
+    model.score(X_test, y_test)    
+    0.76
+```
+***
+## TF-IDF on 'delta' (critic-audience score discrepancy)
+
+### Process
+
+* Rename 'title' column to 'title_' to prevent confusion with instances of the word "title" in vectorized or dummy columns
+
+* Vectorizing original 'reviewText' to dense array for linear model and combine with original dataframe, drop 'reviewText' now that vectorized words are all columns
+```
+tfidf_dense = tfidf_vectorizer.fit_transform(massive['reviewText']).todense()
+new_cols = tfidf_vectorizer.get_feature_names()
+combined = massive.join(pd.DataFrame(tfidf_dense, columns=new_cols))
+
+combined = combined.drop(columns=['reviewText'])
+```
+* Limit populations of critics and publications
+```
+counts = combined.criticName.value_counts()
+threshold = combined.criticName.isin(counts.index[counts<16])
+combined.loc[threshold, 'criticName'] = 'Other'
+
+counts = combined.publicatioName.value_counts()
+threshold = combined.publicatioName.isin(counts.index[counts<12])
+combined.loc[threshold, 'publicatioName'] = 'Other'
 ```
 * Encode dummy values for categorical data columns: 'title_', 'criticName', 'publicatioName', 'scoreSentiment'
+```
+categorical_cols = ['title_', 'criticName', 'publicatioName', 'scoreSentiment']
+combined = pd.get_dummies(combined, columns = categorical_cols)
+```
 * Set 'delta' as target and remaining columns as X
+```
+X = combined.drop(columns=['delta'])
+y = combined['delta']
+```
+
 * Split the data into training and testing sets
+>     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
 * Scale X
 * Perform Principle Component Analysis (PCA)
-* Choose a machine learning model (e.g., Logistic Regression) and train it
-* Results:
-
-#### BERT (Bidirectional Encoder Representations from Transformers)
+* Train Linear Regression model
+```
+model = LinearRegression()
+model.fit(X_train, y_train)
+```
+### Results
+***
+## BERT model on 'delta' (critic-audience score discrepancy)
+Bidirectional Encoder Representations from Transformers (BERT) is an open source natural language processing model developed by Google AI and released in 2018. 
 * Set tokenizer and model
 * define embeddings
 * define vectors
@@ -119,9 +179,13 @@ combined['publicatioName'].value_counts()
 * Perform Principle Component Analysis (PCA)
 * Choose a machine learning model (e.g., Logistic Regression) and train it
 * Results:
+***
+## Incorporating Gradient Boosting
 
+***
+***
+
+
+***
 ***
 ## Conclusions
-
-***
-## Challenges
