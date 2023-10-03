@@ -29,13 +29,13 @@ These csv's had all the data we needed between them, in these columns:
 >     massive['delta'] = massive['tomatoMeter'] - massive['audienceScore']
 
 * We then dropped columns that were unlikely to contribute meaningful data to a machine learning model, including the input audience score and critic score used to create 'delta':
-
->     massive = massive.drop(columns=['originalScore', 'rating', 'ratingContents', 'releaseDateTheaters',
->                                'releaseDateStreaming', 'runtimeMinutes', 'genre', 'originalLanguage',
->                                'director', 'writer', 'boxOffice', 'distributor', 'soundMix', 'reviewUrl',
->                                'id', 'reviewId', 'creationDate', 'isTopCritic', 'reviewState', 'tomatoMeter',
->                                'audienceScore'])
-
+```
+massive = massive.drop(columns=['originalScore', 'rating', 'ratingContents', 'releaseDateTheaters',
+                                'releaseDateStreaming', 'runtimeMinutes', 'genre', 'originalLanguage',
+                                'director', 'writer', 'boxOffice', 'distributor', 'soundMix','reviewUrl',
+                                'id', 'reviewId', 'creationDate', 'isTopCritic', 'reviewState', 'tomatoMeter',
+                                'audienceScore'])
+```
 
 * There were several nulls, all of which were in the four specified data columns and could not be reasonably replaced; all these nulls were dropped. 
 
