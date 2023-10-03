@@ -56,7 +56,68 @@ These csv's had all the data we needed between them, in these columns:
 ***
 ## Data Processing
 
-* Despite data cleaning, we had difficulty working with this large dataset, so we took a ra
+#### Lemmatization
+* We lemmatized the text of critic reviews to perform analysis:
+```
+lemmatizer = WordNetLemmatizer()
+import re
+def process_text(text): 
+    sw = set(stopwords.words('english')) 
+    regex = re.compile("[^a-zA-Z ]") 
+    re_clean = regex.sub('', text) 
+    words = word_tokenize(re_clean) 
+    lem = [lemmatizer.lemmatize(word) for word in words] 
+    output = ' '.join([word.lower() for word in lem if word.lower() not in sw]) 
+    return output
+    
+massive['reviewText'] = massive['reviewText'].apply(lambda x: process_text(x))
+```
+#### TFIDF Sentiment Model
+* Fit TFIDF vectorizer for sentiment model
+* Vectorizing original dataframe to dense array for linear model
+    * rename 'title' column to 'title_' as array will contain any use of the word "title" within reviews
+    * Create columns for each vectorized word and combine with original dataframe
+    * Dropping review text now that vectorized words are all columns
+    * Fill nulls with '0'
+
+#### Linear Regression
+*  As shown, the number of reviews per critic and per publication were sharply distributed. We therefore decided to sort the right tail of critics and publications into an "other" category before encoding these categorical data columns.
+![Publications](output_plots/histo_publicatioName.png)
+
+![Critics](output_plots/histo_criticName.png)
+* We therefore decided to sort the right tail of critics and publications into an "other" category before encoding these categorical data columns.
+```
+counts = combined.criticName.value_counts()
+threshold = combined.criticName.isin(counts.index[counts<16])
+combined.loc[threshold, 'criticName'] = 'Other'
+combined['criticName'].value_counts()
+```
+
+```
+counts = combined.publicatioName.value_counts()
+threshold = combined.publicatioName.isin(counts.index[counts<12])
+combined.loc[threshold, 'publicatioName'] = 'Other'
+combined['publicatioName'].value_counts()
+```
+* Encode dummy values for categorical data columns: 'title_', 'criticName', 'publicatioName', 'scoreSentiment'
+* Set 'delta' as target and remaining columns as X
+* Split the data into training and testing sets
+* Scale X
+* Perform Principle Component Analysis (PCA)
+* Choose a machine learning model (e.g., Logistic Regression) and train it
+* Results:
+
+#### BERT (Bidirectional Encoder Representations from Transformers)
+* Set tokenizer and model
+* define embeddings
+* define vectors
+* Encode dummy values for categorical data columns: 'title_', 'criticName', 'publicatioName', 'scoreSentiment'
+* Set 'delta' as target and remaining columns as X
+* Split the data into training and testing sets
+* Scale X
+* Perform Principle Component Analysis (PCA)
+* Choose a machine learning model (e.g., Logistic Regression) and train it
+* Results:
 
 ***
 ## Conclusions
