@@ -82,6 +82,7 @@ massive['reviewText'] = massive['reviewText'].apply(lambda x: process_text(x))
 
 #### Linear Regression
 *  As shown, the number of reviews per critic and per publication were sharply distributed. We therefore decided to sort the right tail of critics and publications into an "other" category before encoding these categorical data columns.
+
 ![Publications](output_plots/histo_publicatioName.png)
 
 ![Critics](output_plots/histo_criticName.png)
