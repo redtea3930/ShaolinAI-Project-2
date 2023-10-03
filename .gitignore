@@ -1,2 +1,8 @@
 massive.csv
 massive-checkpoint.csv
+
+massive_rotten_tomatoes_movie_reviews.csv
+massive_rotten_tomatoes_movie_reviews-checkpoint.csv
+
+massive_rotten_tomatoes_movies.csv
+massive_rotten_tomatoes_movies-checkpoint.csv
