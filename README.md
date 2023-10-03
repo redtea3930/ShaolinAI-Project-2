@@ -105,20 +105,35 @@ combined.loc[threshold, 'publicatioName'] = 'Other'
 ***
 ## Modeling
 ## TF-IDF Sentiment Model
-Term Frequency-Inverse Document Frequency (TF-IDF) is a measure combining how frequently a term appears within a document (Term Frequency) with the importance of a term within a corpus of documents (Inverse Document Frequency) to assign a weight to each term in a document. Our first model attempts to predict the critic score sentiment, whether 'positive' or 'negative', based on a TF-IDF of the critic reviews. 
+Term Frequency-Inverse Document Frequency (TF-IDF) is a measure combining how frequently a term appears within a document (Term Frequency) with the importance of a term within a corpus of documents (Inverse Document Frequency) to assign a weight to each term in a document. Our first model is a proof-of-concept attempt to predict the critic score sentiment, whether 'positive' or 'negative', based on a TF-IDF of the critic reviews.
+
 ### Process
 * Fit TFIDF vectorizer for sentiment model
+```
+     tfidf_vectorizer = TfidfVectorizer(max_features=5000)
+     X = tfidf_vectorizer.fit_transform(massive['reviewText'])
+     y = massive['scoreSentiment']
+```
 * Split the data into training and testing sets
+```
+     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
+```
 * Train Logistic Regression model
+```
+     model = LogisticRegression(max_iter=5000)
+     model.fit(X_train, y_train)
+```
 
-
-### Results
+### Results:
 ```
     model.score(X_train, y_train)
     0.8237333333333333
+    
     model.score(X_test, y_test)    
     0.76
 ```
+This model works very well, however it is only a proof-of-concept for using TF-IDF on the review text data, matching critic reviews to critic sentiment. 
 ***
 ## TF-IDF on 'delta' (critic-audience score discrepancy)
 
@@ -126,59 +141,163 @@ Term Frequency-Inverse Document Frequency (TF-IDF) is a measure combining how fr
 
 * Rename 'title' column to 'title_' to prevent confusion with instances of the word "title" in vectorized or dummy columns
 
-* Vectorizing original 'reviewText' to dense array for linear model and combine with original dataframe, drop 'reviewText' now that vectorized words are all columns
+* Vectorizing original 'reviewText' to dense array for linear model and combine with original dataframe, drop 'reviewText' now that vectorized words are all columns. Replace nulls in vectorized columns with 0.
 ```
-tfidf_dense = tfidf_vectorizer.fit_transform(massive['reviewText']).todense()
-new_cols = tfidf_vectorizer.get_feature_names()
-combined = massive.join(pd.DataFrame(tfidf_dense, columns=new_cols))
+     tfidf_dense = tfidf_vectorizer.fit_transform(massive['reviewText']).todense()
+     new_cols = tfidf_vectorizer.get_feature_names()
+     combined = massive.join(pd.DataFrame(tfidf_dense, columns=new_cols))
 
-combined = combined.drop(columns=['reviewText'])
+     combined = combined.drop(columns=['reviewText'])
+
+     combined = combined.fillna(0)
 ```
 * Limit populations of critics and publications
 ```
-counts = combined.criticName.value_counts()
-threshold = combined.criticName.isin(counts.index[counts<16])
-combined.loc[threshold, 'criticName'] = 'Other'
+     counts = combined.criticName.value_counts()
+     threshold = combined.criticName.isin(counts.index[counts<16])
+     combined.loc[threshold, 'criticName'] = 'Other'
 
-counts = combined.publicatioName.value_counts()
-threshold = combined.publicatioName.isin(counts.index[counts<12])
-combined.loc[threshold, 'publicatioName'] = 'Other'
+     counts = combined.publicatioName.value_counts()
+     threshold = combined.publicatioName.isin(counts.index[counts<12])
+     combined.loc[threshold, 'publicatioName'] = 'Other'
 ```
 * Encode dummy values for categorical data columns: 'title_', 'criticName', 'publicatioName', 'scoreSentiment'
 ```
-categorical_cols = ['title_', 'criticName', 'publicatioName', 'scoreSentiment']
-combined = pd.get_dummies(combined, columns = categorical_cols)
+     categorical_cols = ['title_', 'criticName', 'publicatioName', 'scoreSentiment']
+     combined = pd.get_dummies(combined, columns = categorical_cols)
+
+
 ```
 * Set 'delta' as target and remaining columns as X
 ```
-X = combined.drop(columns=['delta'])
-y = combined['delta']
+     X = combined.drop(columns=['delta'])
+     y = combined['delta']
 ```
 
 * Split the data into training and testing sets
->     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
-
+```
+     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+```
 * Scale X
+```
+     sc = StandardScaler()
+     X_train_sc = sc.fit_transform(X_train)
+     X_test_sc = sc.transform(X_test)
+```
+
 * Perform Principle Component Analysis (PCA)
+```
+     pca = PCA(n_components=500)
+     X_train_p = pca.fit_transform(X_train_sc)
+     X_test_p = pca.transform(X_test_sc)
+```
 * Train Linear Regression model
 ```
-model = LinearRegression()
-model.fit(X_train, y_train)
+     model = LinearRegression()
+     model.fit(X_train_p, y_train)
 ```
-### Results
+### Results:
+* Model scores:
+```
+     model.score(X_train_p, y_train)
+     0.28077819576737584
+     
+     model.score(X_test_p, y_test)
+     0.1758836524732681
+     
+```
+* y predictions:
+```
+     predictions = model.predict(X_test_p)
+     
+     predictions.mean()
+     0.9831749268123526
+     
+     predictions.min()
+     -29.810990313343122
+     
+     y_test.mean()
+     0.9017618793379605
+     
+     y_test.min()
+     -64.0
+```
+* r2:
+```
+     from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+     r2 = r2_score(y_test, predictions)
+     r2
+     0.1758836524732681
+```
+
 ***
 ## BERT model on 'delta' (critic-audience score discrepancy)
 Bidirectional Encoder Representations from Transformers (BERT) is an open source natural language processing model developed by Google AI and released in 2018. 
-* Set tokenizer and model
-* define embeddings
-* define vectors
+* Pull tokenizer and model from Hugging Face library
+```
+     tokenizer = AutoTokenizer.from_pretrained("activebus/BERT_Review")
+     model = AutoModel.from_pretrained("activebus/BERT_Review")
+```
+* Text preprocessing function
+```
+     def preprocess(text):
+         new_text = []
+         for t in text.split(" "):
+             t = '@user' if t.startswith('@') and len(t) > 1 else t
+             t = 'http' if t.startswith('http') else t
+             new_text.append(t)
+         return " ".join(new_text)
+```
+* Function to vectorize text with BERT
+```
+     def get_embedding(text):
+         text = preprocess(text)
+         encoded_input = tokenizer(text, return_tensors='pt')
+         features = model(**encoded_input)
+         features = features[0].detach().numpy() 
+         features_mean = np.mean(features[0], axis=0) 
+         return features_mean
+         
+```
+* Applying the function to reviewText and outputting to embeddings column
+```
+     massive['embeddings'] = massive.reviewText.map(lambda x: get_embedding(x))
+```
+* Converting embeddings column to numpy array
+```
+     vectors = np.array(massive.embeddings.tolist(), dtype='float')
+     vectors[:10]
+```
+* Flattening numpy array and creating dataframe with it
+```
+     v_df = pd.DataFrame(vectors, columns=[f'col{i+1}' for i in range(vectors.shape[1])])
+```
+* Drop review text now it is vectorized, and drop embeddings now that it is flattened
+```
+     massive = massive.drop(columns=['reviewText', 'embeddings'])
+```
+* Limit populations of critics and publications
 * Encode dummy values for categorical data columns: 'title_', 'criticName', 'publicatioName', 'scoreSentiment'
+* Merging massive df with vectorized df
+```
+     combined = pd.concat([massive, v_df], axis=1)
+     combined.head(1)
+```
 * Set 'delta' as target and remaining columns as X
 * Split the data into training and testing sets
 * Scale X
 * Perform Principle Component Analysis (PCA)
 * Choose a machine learning model (e.g., Logistic Regression) and train it
-* Results:
+## Results:
+* Model scores:
+```
+     model.score(X_train_p, y_train)
+     0.9227881013926973
+     
+     model.score(X_test_p, y_test)
+     0.5212681489904241
+```
+
 ***
 ## Incorporating Gradient Boosting
 
