@@ -58,7 +58,7 @@ massive = massive.drop(columns=['originalScore', 'rating', 'ratingContents', 're
 >     massive = massive.drop_duplicates(subset='reviewText', keep='first')
 
 * This provided our final cleaned dataframe:
-![massive_cleaned](output_plots/massive_cleaned.png)
+![massive_cleaned](plots_and_graphs/massive_cleaned.png)
 
 
 ### Random subsampling
@@ -137,9 +137,9 @@ This model works very well, however it is only a proof-of-concept for using TF-I
 ```
 * Limit populations of critics and publications: As shown, the number of reviews per critic and per publication were sharply distributed. We therefore decided to sort the right tail of critic and publication distributions into an "other" category before encoding these categorical data columns in order to limit the number of dummy values in models using these columns. Thresholds for the minimum number of reviews to set critics and publications as their own category were manually selected.
 
-![Publications](output_plots/histo_publicatioName.png)
+![Publications](plots_and_graphs/histo_publicatioName.png)
 
-![Critics](output_plots/histo_criticName.png)
+![Critics](plots_and_graphs/histo_criticName.png)
 
 ```
 counts = combined.criticName.value_counts()
